@@ -1,4 +1,6 @@
 General Compute Agent Latency Benchmark
+<img width="2594" height="1540" alt="image" src="https://github.com/user-attachments/assets/2c24f221-8fa4-4619-9262-328878db516c" />
+
 
 This project measures how inference latency behaves when you move from single-turn LLM calls to multi-step agent trajectories.
 
