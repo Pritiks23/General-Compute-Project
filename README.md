@@ -1,6 +1,3 @@
-General Compute Agent Latency Benchmark
-<img width="2594" height="1540" alt="image" src="https://github.com/user-attachments/assets/2c24f221-8fa4-4619-9262-328878db516c" />
-
 
 
 # Sequential Inference Workflow Benchmark
