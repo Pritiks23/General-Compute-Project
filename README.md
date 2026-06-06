@@ -2,128 +2,272 @@ General Compute Agent Latency Benchmark
 <img width="2594" height="1540" alt="image" src="https://github.com/user-attachments/assets/2c24f221-8fa4-4619-9262-328878db516c" />
 
 
-This project measures how inference latency behaves when you move from single-turn LLM calls to multi-step agent trajectories.
 
-Most benchmarks focus on tokens/sec or single-request latency. That misses what actually matters for agents: latency compounds over sequential steps.
+# Sequential Inference Workflow Benchmark
 
-This repo simulates that effect and measures it using a simple, repeatable agent loop.
+<img width="2594" height="1540" alt="image" src="https://github.com/user-attachments/assets/2c24f221-8fa4-4619-9262-328878db516c" />
 
-What this is testing
+## Overview
 
-The core idea is simple:
+Most LLM benchmarks focus on a single request.
 
-An agent doesn’t run one request. It runs a chain of dependent requests.
+Typical metrics include:
 
-Each step depends on the previous one, so:
+* Tokens per second
+* Time to first token
+* Single-request latency
+* Throughput
 
-latency doesn’t just matter per call
-it accumulates across the full trajectory
-small differences per step become large differences end-to-end
+While useful, these measurements often fail to capture how LLMs are used in real workflows.
 
-This benchmark models that directly.
+Many applications perform a sequence of dependent inference calls where each model response becomes the input to the next request.
 
-Setup
-1. Create environment
+This project benchmarks latency in that setting.
+
+Rather than measuring a single inference call, it measures how end-to-end latency evolves across a multi-step sequential workflow.
+
+---
+
+## Motivation
+
+Inference performance is often discussed in terms of isolated requests.
+
+However, many practical workloads involve iterative refinement:
+
+* Debugging assistance
+* Code review loops
+* Document improvement
+* Multi-step reasoning
+* AI-assisted research
+
+In these workflows, each step depends on the output of the previous step.
+
+The total user experience is determined not only by individual request latency, but by the cumulative latency across the entire sequence.
+
+This benchmark explores that behavior using a simple and reproducible setup.
+
+---
+
+## Benchmark Methodology
+
+The benchmark begins with a fixed prompt:
+
+```text
+You are debugging a distributed system. Improve root cause analysis step by step.
+```
+
+For each iteration:
+
+1. Send the current prompt to the model
+2. Measure end-to-end request latency
+3. Store the generated response
+4. Construct the next prompt using the previous output
+
+Example workflow:
+
+```text
+Initial Prompt
+      ↓
+Model Response
+      ↓
+"Improve this analysis:"
+      +
+Previous Response
+      ↓
+Next Request
+      ↓
+Repeat
+```
+
+This creates a chain of dependent inference requests that simulates an iterative refinement workflow.
+
+---
+
+## Metrics Collected
+
+For every step, the benchmark records:
+
+* Request latency
+* Model output
+
+It also reports:
+
+* Total workflow latency
+* Average latency per step
+
+Example output:
+
+```json
+{
+  "steps": 3,
+  "step_times": [
+    4.80,
+    9.40,
+    36.46
+  ],
+  "total_latency": 50.66,
+  "avg_latency": 16.89
+}
+```
+
+Results are stored in:
+
+```text
+results.json
+```
+
+---
+
+## Running the Benchmark
+
+### Create Environment
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
-2. Install dependencies
+```
+
+### Install Dependencies
+
+```bash
 pip install openai matplotlib
-3. Set API key
+```
+
+### Configure API Key
+
+```bash
 export GENERAL_COMPUTE_API_KEY="your_key_here"
-Run benchmark
-python3 run.py
-This runs a small agent loop and logs:
+```
 
-per-step latency
-total runtime
-outputs per step
+### Run
 
-Results are saved to:
+```bash
+python run.py
+```
 
-results.json
-Plot results
-python3 plot.py
-This produces a simple line plot of latency per step.
-What the benchmark does
+Example output:
 
-Each run follows this loop:
+```text
+🚀 Running General Compute Benchmark...
 
-Start with a fixed debugging task
-Send it to the model
-Take the response
-Feed it back as the next prompt
-Repeat for N steps
+Step 1/3
+Step 2/3
+Step 3/3
 
-No batching. No parallelism. Just sequential dependency.
+✅ DONE
+Total latency: 50.66
+Avg latency: 16.89
+```
 
-This is intentional — it mirrors how agents behave in practice.
-Why this matters
+---
 
-Most inference systems are optimized for throughput.
+## Visualizing Results
 
-Agents care about something different:
+Generate a latency plot:
 
-step time
-consistency of latency
-how delays accumulate over a trajectory
+```bash
+python plot.py
+```
 
-Even small differences per request change what kinds of workflows are viable.
+This displays latency for each workflow step.
 
-For example:
+---
 
-1.5s per step vs 3s per step doesn’t look dramatic
-but over 10–20 steps, it becomes the difference between a usable agent and a stalled one
+## Interpreting Results
 
+This benchmark measures end-to-end request latency across a sequence of dependent inference calls.
 
+If latency increases between steps, several factors may contribute:
 
-More:
-step_times: [
-  4.80s,
-  9.40s,
-  36.46s
-]
+### Prompt Growth
 
-This is the key signal.
+Each response becomes part of the next request.
 
-You are not seeing stable latency. You are seeing latency amplification over a trajectory.
+As responses grow, later prompts may contain more tokens.
 
-We are seeing:
+### Response Length Variation
 
-non-linear latency growth in sequential agent execution
+Different steps may generate different amounts of text.
 
-⚠️ Likely causes 
-1. Context / prompt degradation (most likely)
+Longer generations generally require more computation.
 
-Even though your code simplified state, the model still sees:
+### Infrastructure Effects
 
-longer reasoning chains
-more complex intermediate outputs
-increasing token entropy
+Observed latency may also be influenced by:
 
-This causes:
+* Queueing delays
+* Backend load
+* Request routing
+* Resource contention
+* Network overhead
 
-decode gets slower as output becomes harder to produce
+The benchmark intentionally measures total workflow latency rather than attempting to isolate individual system components.
 
-2. Decode-heavy response expansion
+---
 
-If outputs grow in length:
+## What This Benchmark Measures
 
-more tokens generated
-decode time dominates
-latency scales superlinearly
+This benchmark is useful for evaluating:
 
-⚠️ The real metric that matters
+* Sequential inference workflows
+* Iterative LLM refinement patterns
+* Latency accumulation across dependent requests
+* Relative performance between inference providers
 
-Instead of average, your system is showing:
+---
 
-latency variance explosion
+## What This Benchmark Does Not Measure
 
-More informative view:
+This project does not directly measure:
 
-Step 1 → baseline
-Step 2 → ~2x
-Step 3 → ~8x
+* Prefill latency
+* Decode latency
+* GPU utilization
+* KV cache efficiency
+* Scheduling behavior
+* Throughput
+* Time to first token
 
-That pattern is the real signal.
+Similarly, it should not be used to conclude that latency growth is caused by any single factor without additional instrumentation.
 
-Takeaway: inference latency is not constant across agent steps — it compounds under sequential reasoning, producing a heavy-tailed trajectory cost profile
+---
+
+## Why This Project Exists
+
+A large portion of inference benchmarking focuses on isolated requests.
+
+Real applications increasingly rely on chains of dependent inference calls.
+
+Understanding how latency behaves across those chains can provide useful insight into the practical responsiveness of an inference platform.
+
+This project provides a lightweight framework for exploring that behavior.
+
+---
+
+## Future Improvements
+
+Potential extensions include:
+
+* Prompt token tracking
+* Completion token tracking
+* Multiple benchmark runs
+* p50 / p95 / p99 latency reporting
+* Provider-to-provider comparisons
+* Streaming inference support
+* Constant-context versus growing-context experiments
+* Prefill and decode analysis when provider metrics are available
+
+---
+
+## Repository Structure
+
+```text
+client_gc.py      # General Compute API client
+client_vast.py    # Alternate provider client
+config.py         # Configuration
+run.py            # Benchmark runner
+plot.py           # Visualization
+test_gc.py        # Connectivity test
+results.json      # Benchmark output
+README.md
+```
